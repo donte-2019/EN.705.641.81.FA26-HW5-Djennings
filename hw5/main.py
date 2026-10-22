@@ -1,4 +1,5 @@
 from data import load_data, create_datasets, create_dataloader, VOCAB_SIZE
+import time
 import torch
 from gpt.model import GPT
 from gpt.trainer import Trainer
@@ -14,11 +15,24 @@ def batch_end_callback(trainer):
             f"train loss {trainer.iter_train_loss.item():.5f} train ppl {trainer.iter_train_ppl.item():.3f}")
 
 
+def save_checkpoint(model, path='model.pth', attempts=10):
+    # added: on Windows a file that was just written can stay locked for a moment
+    # (e.g. by an antivirus scan, error 1224), so retry the save briefly instead of crashing
+    for attempt in range(attempts):
+        try:
+            torch.save(model.state_dict(), path)
+            return
+        except RuntimeError:
+            if attempt == attempts - 1:
+                raise
+            time.sleep(1)
+
+
 def evaluation_callback(trainer):
     print(f"iter {trainer.iter_num}: validation loss {trainer.valid_loss:.5f} validation ppl {trainer.valid_ppl:.3f}")
     if trainer.valid_ppl < trainer.best_valid_ppl:
         print(f"best model so far, saving...")
-        torch.save(trainer.model.state_dict(), 'model.pth')
+        save_checkpoint(trainer.model, 'model.pth')
         trainer.best_valid_ppl = trainer.valid_ppl
 
 
@@ -77,11 +91,11 @@ if __name__ == '__main__':
     # create datasets
     train_d, dev_d = create_datasets(train_data, dev_data, block_size=32)
 
-    # TODO: run cpu & gpu comparison
+    # run cpu & gpu comparison
     # uncomment the following line to run
     cpu_gpu_comparison(train_d, dev_d, max_iter=50)
 
-    # TODO: run the full training on gpu
+    # run the full training on gpu
     # uncomment the following line to run
     gpu_full_run(train_d, dev_d, max_iter=20000)
 
